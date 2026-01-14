@@ -1,0 +1,195 @@
+{% extends "base.html" %}
+
+{% block title %}Search Photos - Photo Triage Agent{% endblock %}
+
+{% block content %}
+<div class="container chat-container">
+    <section class="chat-section">
+        <h2>Search Your Photos</h2>
+        <p>Ask questions like "Find photos from my trip to Japan" or "Show me all food pictures"</p>
+
+        <div class="chat-interface">
+            <div class="chat-messages" id="chat-messages">
+                <div class="message assistant">
+                    <p>What photos are you looking for?</p>
+                </div>
+            </div>
+
+            <form id="chat-form" class="chat-input-form">
+                <input type="text" id="chat-input" placeholder="Search your photos..."
+                       autocomplete="off" required>
+                <button type="submit" id="chat-submit" class="btn btn-primary">
+                    <span class="btn-text">Search</span>
+                    <span class="btn-loading" style="display: none;">
+                        <span class="spinner"></span> Searching...
+                    </span>
+                </button>
+            </form>
+        </div>
+    </section>
+
+    <section class="search-results" id="search-results">
+        <h3>Results</h3>
+        <div class="results-info" id="results-info"></div>
+        <div class="photo-grid" id="results-grid"></div>
+
+        <div class="suggested-actions" id="suggested-actions"></div>
+    </section>
+</div>
+
+<script>
+let conversationId = null;
+
+document.getElementById('chat-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+
+    const input = document.getElementById('chat-input');
+    const submitBtn = document.getElementById('chat-submit');
+    const message = input.value.trim();
+    if (!message) return;
+
+    // Add user message to chat
+    addMessage('user', message);
+    input.value = '';
+
+    // Show loading state
+    setLoading(true);
+
+    // Add thinking indicator
+    const thinkingId = addThinkingMessage();
+
+    // Send to API
+    try {
+        const response = await fetch('/chat', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+                message: message,
+                conversation_id: conversationId
+            })
+        });
+
+        const result = await response.json();
+
+        // Remove thinking indicator
+        removeThinkingMessage(thinkingId);
+
+        if (result.success && result.data) {
+            const data = result.data;
+            conversationId = data.conversation_id;
+
+            // Add assistant response
+            let responseText = data.response || 'Search complete.';
+            if (data.total_found === 0) {
+                responseText = 'No matching photos found. Try a different search term or make sure photos have been analyzed with LFM classification enabled.';
+            }
+            if (data.clarifying_question) {
+                responseText += '\n\n' + data.clarifying_question;
+            }
+            addMessage('assistant', responseText);
+
+            // Update results
+            updateResults(data);
+        } else {
+            addMessage('assistant', 'Sorry, search failed: ' + (result.error || 'Unknown error'));
+        }
+
+    } catch (error) {
+        removeThinkingMessage(thinkingId);
+        addMessage('assistant', 'Error: ' + error.message);
+    } finally {
+        setLoading(false);
+    }
+});
+
+function setLoading(isLoading) {
+    const input = document.getElementById('chat-input');
+    const submitBtn = document.getElementById('chat-submit');
+    const btnText = submitBtn.querySelector('.btn-text');
+    const btnLoading = submitBtn.querySelector('.btn-loading');
+
+    input.disabled = isLoading;
+    submitBtn.disabled = isLoading;
+    btnText.style.display = isLoading ? 'none' : 'inline';
+    btnLoading.style.display = isLoading ? 'inline-flex' : 'none';
+}
+
+let thinkingCounter = 0;
+function addThinkingMessage() {
+    const messages = document.getElementById('chat-messages');
+    const id = 'thinking-' + (++thinkingCounter);
+    const div = document.createElement('div');
+    div.className = 'message assistant thinking';
+    div.id = id;
+    div.innerHTML = '<p><span class="thinking-dots">Searching your photos<span>.</span><span>.</span><span>.</span></span></p>';
+    messages.appendChild(div);
+    messages.scrollTop = messages.scrollHeight;
+    return id;
+}
+
+function removeThinkingMessage(id) {
+    const el = document.getElementById(id);
+    if (el) el.remove();
+}
+
+function addMessage(role, content) {
+    const messages = document.getElementById('chat-messages');
+    const div = document.createElement('div');
+    div.className = 'message ' + role;
+    div.innerHTML = '<p>' + escapeHtml(content).replace(/\n/g, '<br>') + '</p>';
+    messages.appendChild(div);
+    messages.scrollTop = messages.scrollHeight;
+}
+
+function updateResults(data) {
+    const resultsInfo = document.getElementById('results-info');
+    const resultsGrid = document.getElementById('results-grid');
+    const suggestedActions = document.getElementById('suggested-actions');
+
+    resultsInfo.innerHTML = `Found <strong>${data.total_found}</strong> photos (confidence: ${(data.confidence * 100).toFixed(0)}%)`;
+
+    // Show photo grid
+    resultsGrid.innerHTML = '';
+    data.photos.forEach(photo => {
+        const div = document.createElement('div');
+        div.className = 'photo-card';
+        div.innerHTML = `
+            <div class="photo-thumb">
+                <img src="/thumb/${photo.id}" alt="${photo.filename}"
+                     loading="lazy" onerror="this.src='/static/placeholder.svg'">
+            </div>
+            <div class="photo-info">
+                <p class="filename" title="${photo.path}">${photo.filename}</p>
+            </div>
+        `;
+        resultsGrid.appendChild(div);
+    });
+
+    // Show suggested actions
+    if (data.suggested_actions && data.suggested_actions.length > 0) {
+        suggestedActions.innerHTML = '<p>Try:</p>';
+        data.suggested_actions.forEach(action => {
+            const btn = document.createElement('button');
+            btn.className = 'btn btn-small btn-secondary';
+            btn.textContent = action;
+            btn.addEventListener('click', () => {
+                document.getElementById('chat-input').value = action;
+                document.getElementById('chat-form').dispatchEvent(new Event('submit'));
+            });
+            suggestedActions.appendChild(btn);
+        });
+    } else {
+        suggestedActions.innerHTML = '';
+    }
+
+    // Show results section
+    document.getElementById('search-results').classList.add('visible');
+}
+
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+</script>
+{% endblock %}

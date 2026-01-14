@@ -1,0 +1,445 @@
+{% extends "base.html" %}
+
+{% block title %}Photo Triage Agent - Start{% endblock %}
+
+{% block content %}
+<div class="container">
+    <section class="hero">
+        <h2>Organize Your Photo Library with AI</h2>
+        <p>Select photos to analyze. Find duplicates, blurry shots, and screenshots. All processing happens locally.</p>
+    </section>
+
+    <!-- Step 1: Select Photos -->
+    <section class="upload-section" id="step-select">
+        <h3>1. Select Photos</h3>
+        <div class="upload-options">
+            <div class="upload-option primary">
+                <label for="folder-input" class="btn btn-primary btn-large">
+                    Select Folder
+                </label>
+                <input type="file" id="folder-input" webkitdirectory directory multiple hidden>
+                <p class="hint">Select a folder containing photos</p>
+            </div>
+            <div class="upload-option">
+                <label for="files-input" class="btn btn-secondary btn-large">
+                    Select Files
+                </label>
+                <input type="file" id="files-input" multiple accept="image/*" hidden>
+                <p class="hint">Or select individual photo files</p>
+            </div>
+        </div>
+    </section>
+
+    <!-- Step 2: Review Selection (hidden until files selected) -->
+    <section class="review-section hidden" id="step-review">
+        <h3>2. Review Selection</h3>
+
+        <div class="selection-stats">
+            <div class="stat">
+                <span class="stat-value" id="photo-count">0</span>
+                <span class="stat-label">Photos Selected</span>
+            </div>
+            <div class="stat">
+                <span class="stat-value" id="total-size">0 MB</span>
+                <span class="stat-label">Total Size</span>
+            </div>
+        </div>
+
+        <!-- Warning for large selections -->
+        <div class="warning-panel hidden" id="limit-warning">
+            <h4>Large Selection Detected</h4>
+            <p>You've selected <strong id="warning-count">0</strong> photos. For best performance, we recommend limiting to 100 photos.</p>
+            <div class="limit-options">
+                <label>
+                    <input type="radio" name="limit-choice" value="100" checked>
+                    Analyze first 100 photos
+                </label>
+                <label>
+                    <input type="radio" name="limit-choice" value="all">
+                    Analyze all photos (may be slow)
+                </label>
+            </div>
+        </div>
+
+        <!-- Photo preview grid -->
+        <div class="preview-grid" id="preview-grid">
+            <!-- Filled by JavaScript -->
+        </div>
+
+        <div class="form-group checkbox">
+            <label>
+                <input type="checkbox" id="skip-lfm">
+                Quick mode (skip AI classification, faster but less accurate)
+            </label>
+        </div>
+
+        <div class="action-buttons">
+            <button class="btn" id="clear-btn">Clear Selection</button>
+            <button class="btn btn-primary btn-large" id="analyze-btn">
+                Start Analysis
+            </button>
+        </div>
+    </section>
+
+    <!-- Step 3: Upload Progress (hidden until upload starts) -->
+    <section class="upload-progress-section hidden" id="step-upload">
+        <h3>3. Uploading Photos...</h3>
+        <div class="progress-bar-container">
+            <div id="upload-progress-bar" class="progress-bar" style="width: 0%"></div>
+        </div>
+        <p id="upload-progress-text">Preparing upload...</p>
+    </section>
+
+    <!-- Features section -->
+    <section class="features">
+        <h3>What We Analyze</h3>
+        <div class="feature-grid">
+            <div class="feature">
+                <h4>AI Classification</h4>
+                <p>Categorize photos: people, landscape, food, documents, etc.</p>
+            </div>
+            <div class="feature">
+                <h4>Duplicate Detection</h4>
+                <p>Find exact and near-duplicate photos using perceptual hashing.</p>
+            </div>
+            <div class="feature">
+                <h4>Quality Analysis</h4>
+                <p>Detect blurry photos you might want to delete.</p>
+            </div>
+            <div class="feature">
+                <h4>Screenshot Detection</h4>
+                <p>Identify screenshots and memes for easy cleanup.</p>
+            </div>
+        </div>
+    </section>
+</div>
+
+<style>
+/* Additional styles for upload UI */
+.upload-options {
+    display: flex;
+    gap: 2rem;
+    justify-content: center;
+    margin: 2rem 0;
+}
+
+.upload-option {
+    text-align: center;
+}
+
+.upload-option .hint {
+    margin-top: 0.5rem;
+    color: var(--text-secondary);
+    font-size: 0.875rem;
+}
+
+.btn-large {
+    padding: 1rem 2rem;
+    font-size: 1.125rem;
+}
+
+.selection-stats {
+    display: flex;
+    gap: 2rem;
+    justify-content: center;
+    margin: 1.5rem 0;
+}
+
+.stat {
+    text-align: center;
+}
+
+.stat-value {
+    display: block;
+    font-size: 2rem;
+    font-weight: 700;
+    color: var(--primary-color);
+}
+
+.stat-label {
+    color: var(--text-secondary);
+    font-size: 0.875rem;
+}
+
+.warning-panel {
+    background: #fff3cd;
+    border: 1px solid #ffc107;
+    border-radius: 8px;
+    padding: 1rem 1.5rem;
+    margin: 1.5rem 0;
+}
+
+.warning-panel h4 {
+    color: #856404;
+    margin: 0 0 0.5rem 0;
+}
+
+.limit-options {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    margin-top: 1rem;
+}
+
+.limit-options label {
+    cursor: pointer;
+}
+
+.preview-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
+    gap: 0.5rem;
+    max-height: 300px;
+    overflow-y: auto;
+    padding: 1rem;
+    background: var(--bg-secondary);
+    border-radius: 8px;
+    margin: 1rem 0;
+}
+
+.preview-thumb {
+    aspect-ratio: 1;
+    border-radius: 4px;
+    overflow: hidden;
+    background: var(--bg-primary);
+}
+
+.preview-thumb img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.preview-more {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--bg-primary);
+    color: var(--text-secondary);
+    font-weight: 500;
+    aspect-ratio: 1;
+    border-radius: 4px;
+}
+
+.action-buttons {
+    display: flex;
+    gap: 1rem;
+    justify-content: center;
+    margin-top: 1.5rem;
+}
+
+.upload-progress-section {
+    text-align: center;
+}
+
+.review-section, .upload-progress-section {
+    animation: fadeIn 0.3s ease;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+</style>
+
+<script>
+// State
+let selectedFiles = [];
+let sessionId = null;
+
+// DOM elements
+const folderInput = document.getElementById('folder-input');
+const filesInput = document.getElementById('files-input');
+const stepSelect = document.getElementById('step-select');
+const stepReview = document.getElementById('step-review');
+const stepUpload = document.getElementById('step-upload');
+const photoCount = document.getElementById('photo-count');
+const totalSize = document.getElementById('total-size');
+const limitWarning = document.getElementById('limit-warning');
+const warningCount = document.getElementById('warning-count');
+const previewGrid = document.getElementById('preview-grid');
+const clearBtn = document.getElementById('clear-btn');
+const analyzeBtn = document.getElementById('analyze-btn');
+const uploadProgressBar = document.getElementById('upload-progress-bar');
+const uploadProgressText = document.getElementById('upload-progress-text');
+
+// Supported formats
+const SUPPORTED_FORMATS = ['.jpg', '.jpeg', '.png', '.heic', '.webp', '.gif', '.bmp', '.tiff', '.tif'];
+
+// File selection handlers
+folderInput.addEventListener('change', handleFileSelection);
+filesInput.addEventListener('change', handleFileSelection);
+
+function handleFileSelection(event) {
+    const files = Array.from(event.target.files);
+
+    // Filter to only supported image formats
+    selectedFiles = files.filter(file => {
+        const ext = '.' + file.name.split('.').pop().toLowerCase();
+        return SUPPORTED_FORMATS.includes(ext);
+    });
+
+    if (selectedFiles.length === 0) {
+        alert('No supported image files found. Please select JPG, PNG, HEIC, or WebP files.');
+        return;
+    }
+
+    updateReviewSection();
+}
+
+function updateReviewSection() {
+    // Show review section
+    stepReview.classList.remove('hidden');
+    stepSelect.style.display = 'none';
+
+    // Update stats
+    photoCount.textContent = selectedFiles.length;
+
+    const totalBytes = selectedFiles.reduce((sum, f) => sum + f.size, 0);
+    totalSize.textContent = formatBytes(totalBytes);
+
+    // Show warning if > 100 photos
+    if (selectedFiles.length > 100) {
+        limitWarning.classList.remove('hidden');
+        warningCount.textContent = selectedFiles.length;
+    } else {
+        limitWarning.classList.add('hidden');
+    }
+
+    // Generate previews (max 50 shown)
+    generatePreviews();
+}
+
+function generatePreviews() {
+    previewGrid.innerHTML = '';
+    const maxPreviews = 50;
+    const filesToPreview = selectedFiles.slice(0, maxPreviews);
+
+    filesToPreview.forEach(file => {
+        const thumb = document.createElement('div');
+        thumb.className = 'preview-thumb';
+
+        const img = document.createElement('img');
+        img.src = URL.createObjectURL(file);
+        img.onload = () => URL.revokeObjectURL(img.src);
+
+        thumb.appendChild(img);
+        previewGrid.appendChild(thumb);
+    });
+
+    // Show "+N more" if there are more files
+    if (selectedFiles.length > maxPreviews) {
+        const more = document.createElement('div');
+        more.className = 'preview-more';
+        more.textContent = `+${selectedFiles.length - maxPreviews}`;
+        previewGrid.appendChild(more);
+    }
+}
+
+function formatBytes(bytes) {
+    if (bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+}
+
+// Clear selection
+clearBtn.addEventListener('click', () => {
+    selectedFiles = [];
+    folderInput.value = '';
+    filesInput.value = '';
+    stepReview.classList.add('hidden');
+    stepSelect.style.display = 'block';
+    previewGrid.innerHTML = '';
+});
+
+// Start analysis
+analyzeBtn.addEventListener('click', async () => {
+    // Check limit preference
+    let filesToUpload = selectedFiles;
+    if (selectedFiles.length > 100) {
+        const limitChoice = document.querySelector('input[name="limit-choice"]:checked').value;
+        if (limitChoice === '100') {
+            filesToUpload = selectedFiles.slice(0, 100);
+        }
+    }
+
+    const skipLfm = document.getElementById('skip-lfm').checked;
+
+    // Show upload progress
+    stepReview.classList.add('hidden');
+    stepUpload.classList.remove('hidden');
+
+    try {
+        // Step 1: Create upload session
+        uploadProgressText.textContent = 'Creating upload session...';
+        const sessionResponse = await fetch('/upload/session', { method: 'POST' });
+        const sessionResult = await sessionResponse.json();
+
+        if (!sessionResult.success) {
+            throw new Error(sessionResult.error || 'Failed to create session');
+        }
+
+        sessionId = sessionResult.data.session_id;
+
+        // Step 2: Upload files in batches
+        const batchSize = 10;
+        let uploaded = 0;
+
+        for (let i = 0; i < filesToUpload.length; i += batchSize) {
+            const batch = filesToUpload.slice(i, i + batchSize);
+            const formData = new FormData();
+
+            batch.forEach(file => {
+                formData.append('files', file);
+            });
+
+            const uploadResponse = await fetch(`/upload/photos/${sessionId}`, {
+                method: 'POST',
+                body: formData,
+            });
+
+            const uploadResult = await uploadResponse.json();
+            if (!uploadResult.success) {
+                console.warn('Batch upload issue:', uploadResult.error);
+            }
+
+            uploaded += batch.length;
+            const percent = Math.round((uploaded / filesToUpload.length) * 100);
+            uploadProgressBar.style.width = `${percent}%`;
+            uploadProgressText.textContent = `Uploading... ${uploaded}/${filesToUpload.length} photos`;
+        }
+
+        // Step 3: Start analysis
+        uploadProgressText.textContent = 'Starting analysis...';
+
+        const analyzeResponse = await fetch('/analyze/uploaded', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                session_id: sessionId,
+                skip_lfm: skipLfm,
+            }),
+        });
+
+        const analyzeResult = await analyzeResponse.json();
+
+        if (analyzeResult.success && analyzeResult.data) {
+            // Redirect to progress page
+            window.location.href = `/progress/${analyzeResult.data.job_id}`;
+        } else {
+            throw new Error(analyzeResult.error || 'Failed to start analysis');
+        }
+
+    } catch (error) {
+        console.error('Upload/analysis error:', error);
+        alert('Error: ' + error.message);
+
+        // Reset UI
+        stepUpload.classList.add('hidden');
+        stepReview.classList.remove('hidden');
+    }
+});
+</script>
+{% endblock %}

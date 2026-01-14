@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+
+{% block title %}Results - Photo Triage Agent{% endblock %}
+
+{% block content %}
+<div class="container">
+    <section class="results-header">
+        <h2>Analysis Complete</h2>
+        <p>Processed <strong>{{ total_photos }}</strong> photos</p>
+    </section>
+
+    <section class="results-summary">
+        <div class="summary-grid">
+            <div class="summary-card">
+                <h4>Categories</h4>
+                <ul class="category-list">
+                    {% for cat, count in categories.items() %}
+                    <li>
+                        <a href="/dashboard?category={{ cat }}">{{ cat }}</a>
+                        <span class="count">{{ count }}</span>
+                    </li>
+                    {% endfor %}
+                </ul>
+            </div>
+
+            <div class="summary-card">
+                <h4>Quality Issues</h4>
+                <ul class="issues-list">
+                    <li>
+                        <a href="/dashboard?is_blurry=true">Blurry Photos</a>
+                        <span class="count">{{ blurry_count }}</span>
+                    </li>
+                    <li>
+                        <a href="/dashboard?is_screenshot=true">Screenshots</a>
+                        <span class="count">{{ screenshot_count }}</span>
+                    </li>
+                </ul>
+            </div>
+
+            <div class="summary-card">
+                <h4>Duplicates</h4>
+                <p class="duplicate-count">
+                    <a href="/duplicates-view">{{ duplicate_groups }} groups found</a>
+                </p>
+            </div>
+        </div>
+    </section>
+
+    {% if metrics %}
+    <section class="performance-summary">
+        <h3>Performance Summary</h3>
+        <div class="metrics-row">
+            <div class="metric">
+                <span class="metric-label">Total Time</span>
+                <span class="metric-value">{{ "%.1f"|format(metrics.elapsed_seconds) }}s</span>
+            </div>
+            <div class="metric">
+                <span class="metric-label">Avg Speed</span>
+                <span class="metric-value">{{ "%.2f"|format(metrics.avg_photos_per_second) }} photos/sec</span>
+            </div>
+            <div class="metric">
+                <span class="metric-label">Avg Inference</span>
+                <span class="metric-value">{{ "%.0f"|format(metrics.avg_inference_ms) }} ms</span>
+            </div>
+        </div>
+    </section>
+    {% endif %}
+
+    <section class="actions">
+        <h3>Quick Actions</h3>
+        <div class="action-buttons">
+            <a href="/dashboard" class="btn btn-primary">Browse All Photos</a>
+            <a href="/duplicates-view" class="btn btn-secondary">Review Duplicates</a>
+            <a href="/chat" class="btn btn-secondary">Search Photos</a>
+            <a href="/" class="btn">Analyze Another Folder</a>
+        </div>
+    </section>
+</div>
+{% endblock %}

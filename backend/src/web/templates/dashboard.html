@@ -1,0 +1,143 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard - Photo Triage Agent{% endblock %}
+
+{% block content %}
+<div class="container">
+    <section class="dashboard-header">
+        <h2>Photo Dashboard</h2>
+
+        <div class="filters">
+            <form id="filter-form" class="filter-form">
+                <select id="category-filter" name="category">
+                    <option value="">All Categories</option>
+                    {% for cat in categories %}
+                    <option value="{{ cat }}" {% if current_category == cat %}selected{% endif %}>
+                        {{ cat|title }}
+                    </option>
+                    {% endfor %}
+                </select>
+
+                <label class="checkbox-label">
+                    <input type="checkbox" id="blurry-filter" name="is_blurry"
+                           {% if is_blurry %}checked{% endif %}>
+                    Blurry Only
+                </label>
+
+                <label class="checkbox-label">
+                    <input type="checkbox" id="screenshot-filter" name="is_screenshot"
+                           {% if is_screenshot %}checked{% endif %}>
+                    Screenshots Only
+                </label>
+
+                <button type="submit" class="btn btn-small">Apply</button>
+            </form>
+        </div>
+    </section>
+
+    <section class="photo-grid-section">
+        <div class="selection-bar" id="selection-bar">
+            <span id="selected-count">0 selected</span>
+            <button class="btn btn-danger btn-small" id="trash-btn" disabled>
+                Move to Trash
+            </button>
+        </div>
+
+        <div class="photo-grid" id="photo-grid">
+            {% for photo in photos %}
+            <div class="photo-card" data-id="{{ photo.id }}">
+                <div class="photo-thumb">
+                    <img src="/thumb/{{ photo.id }}" alt="{{ photo.filename }}"
+                         loading="lazy" onerror="this.src='/static/placeholder.svg'">
+                </div>
+                <div class="photo-info">
+                    <p class="filename" title="{{ photo.path }}">{{ photo.filename }}</p>
+                    <label class="select-checkbox">
+                        <input type="checkbox" class="photo-select" data-id="{{ photo.id }}">
+                    </label>
+                </div>
+            </div>
+            {% else %}
+            <p class="no-photos">No photos found. <a href="/">Start an analysis</a> first.</p>
+            {% endfor %}
+        </div>
+
+        {% if total > limit %}
+        <div class="pagination">
+            {% if offset > 0 %}
+            <a href="?offset={{ offset - limit }}&limit={{ limit }}" class="btn btn-small">Previous</a>
+            {% endif %}
+            <span>Showing {{ offset + 1 }}-{{ [offset + limit, total]|min }} of {{ total }}</span>
+            {% if offset + limit < total %}
+            <a href="?offset={{ offset + limit }}&limit={{ limit }}" class="btn btn-small">Next</a>
+            {% endif %}
+        </div>
+        {% endif %}
+    </section>
+</div>
+
+<script>
+// Selection management
+const selectedPhotos = new Set();
+
+document.querySelectorAll('.photo-select').forEach(checkbox => {
+    checkbox.addEventListener('change', (e) => {
+        const photoId = parseInt(e.target.dataset.id);
+        if (e.target.checked) {
+            selectedPhotos.add(photoId);
+        } else {
+            selectedPhotos.delete(photoId);
+        }
+        updateSelectionUI();
+    });
+});
+
+function updateSelectionUI() {
+    const count = selectedPhotos.size;
+    document.getElementById('selected-count').textContent = `${count} selected`;
+    document.getElementById('trash-btn').disabled = count === 0;
+}
+
+// Trash action
+document.getElementById('trash-btn').addEventListener('click', async () => {
+    if (selectedPhotos.size === 0) return;
+
+    if (!confirm(`Move ${selectedPhotos.size} photos to trash?`)) return;
+
+    try {
+        const response = await fetch('/actions/trash', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({photo_ids: Array.from(selectedPhotos)})
+        });
+
+        const result = await response.json();
+
+        if (result.success && result.data) {
+            alert(result.data.message);
+            window.location.reload();
+        } else {
+            alert('Error: ' + (result.error || 'Failed to trash photos'));
+        }
+    } catch (error) {
+        alert('Error: ' + error.message);
+    }
+});
+
+// Filter form
+document.getElementById('filter-form').addEventListener('submit', (e) => {
+    e.preventDefault();
+    const params = new URLSearchParams();
+
+    const category = document.getElementById('category-filter').value;
+    const blurry = document.getElementById('blurry-filter').checked;
+    const screenshot = document.getElementById('screenshot-filter').checked;
+
+    if (category) params.set('category', category);
+    if (blurry) params.set('is_blurry', 'true');
+    if (screenshot) params.set('is_screenshot', 'true');
+
+    window.location.href = '/dashboard?' + params.toString();
+});
+</script>
+{% endblock %}

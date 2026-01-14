@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Photo Triage Agent{% endblock %}</title>
+    <link rel="stylesheet" href="/static/style.css">
+    {% block extra_head %}{% endblock %}
+</head>
+<body>
+    <header class="header">
+        <h1><a href="/">Photo Triage Agent</a></h1>
+        <nav>
+            <a href="/">Home</a>
+            <a href="/dashboard">Dashboard</a>
+            <a href="/chat">Search</a>
+        </nav>
+    </header>
+
+    <main class="main">
+        {% block content %}{% endblock %}
+    </main>
+
+    <footer class="footer">
+        <p>Photo Triage Agent v0.1.0 - All processing is done locally</p>
+    </footer>
+
+    <script src="/static/app.js"></script>
+    {% block extra_scripts %}{% endblock %}
+</body>
+</html>

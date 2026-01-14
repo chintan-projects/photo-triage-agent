@@ -1,0 +1,40 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+.env
+*.egg-info/
+dist/
+build/
+
+# Models (large files)
+backend/models/*.gguf
+backend/models/*.bin
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+
+# Testing
+.coverage
+htmlcov/
+.pytest_cache/
+
+# Database
+*.db
+*.sqlite
+
+# Xcode
+frontend/PhotoTriage.xcodeproj/project.xcworkspace/
+frontend/PhotoTriage.xcodeproj/xcuserdata/
+frontend/DerivedData/
+*.xcuserstate
+
+# Logs
+*.log
+logs/

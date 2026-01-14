@@ -1,0 +1,149 @@
+{% extends "base.html" %}
+
+{% block title %}Duplicates - Photo Triage Agent{% endblock %}
+
+{% block content %}
+<div class="container">
+    <section class="duplicates-header">
+        <h2>Duplicate Photos</h2>
+        <p>Found <strong>{{ groups|length }}</strong> duplicate groups</p>
+    </section>
+
+    {% if groups %}
+    <div class="duplicate-groups">
+        {% for group in groups %}
+        <div class="duplicate-group" data-group-id="{{ group.id }}">
+            <div class="group-header">
+                <h3>Group {{ loop.index }} - {{ group.photo_count }} photos</h3>
+                <span class="group-type">{{ group.group_type }}</span>
+            </div>
+
+            {% if group.description %}
+            <p class="group-description">{{ group.description }}</p>
+            {% endif %}
+
+            <div class="group-photos">
+                {% for photo in group.photos %}
+                <div class="duplicate-photo {% if loop.first %}recommended{% endif %}">
+                    <div class="photo-thumb">
+                        <img src="/thumb/{{ photo.id }}" alt="{{ photo.filename }}"
+                             loading="lazy" onerror="this.src='/static/placeholder.svg'">
+                        {% if loop.first %}
+                        <span class="badge">Best</span>
+                        {% endif %}
+                    </div>
+                    <div class="photo-details">
+                        <p class="filename">{{ photo.filename }}</p>
+                        {% if photo.file_size %}
+                        <p class="file-size">{{ "%.1f"|format(photo.file_size / 1024 / 1024) }} MB</p>
+                        {% endif %}
+                        <label>
+                            <input type="checkbox" class="photo-select"
+                                   data-id="{{ photo.id }}" {% if not loop.first %}checked{% endif %}>
+                            Select for trash
+                        </label>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+
+            <div class="group-actions">
+                <button class="btn btn-danger btn-small trash-others"
+                        data-group-id="{{ group.id }}">
+                    Trash Selected
+                </button>
+                <button class="btn btn-small skip-group">Skip</button>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+
+    <div class="bulk-actions">
+        <button class="btn btn-danger" id="trash-all-duplicates">
+            Trash All Duplicates (Keep Best)
+        </button>
+    </div>
+
+    {% else %}
+    <div class="no-duplicates">
+        <p>No duplicate photos found.</p>
+        <a href="/" class="btn">Analyze a folder</a>
+    </div>
+    {% endif %}
+</div>
+
+<script>
+// Trash selected in group
+document.querySelectorAll('.trash-others').forEach(btn => {
+    btn.addEventListener('click', async (e) => {
+        const group = e.target.closest('.duplicate-group');
+        const checkboxes = group.querySelectorAll('.photo-select:checked');
+        const photoIds = Array.from(checkboxes).map(cb => parseInt(cb.dataset.id));
+
+        if (photoIds.length === 0) {
+            alert('No photos selected');
+            return;
+        }
+
+        if (!confirm(`Move ${photoIds.length} photos to trash?`)) return;
+
+        try {
+            const response = await fetch('/actions/trash', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({photo_ids: photoIds})
+            });
+
+            const result = await response.json();
+            if (result.success) {
+                group.remove();
+            } else {
+                alert('Error: ' + (result.error || 'Failed to trash photos'));
+            }
+        } catch (error) {
+            alert('Error: ' + error.message);
+        }
+    });
+});
+
+// Skip group
+document.querySelectorAll('.skip-group').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+        e.target.closest('.duplicate-group').remove();
+    });
+});
+
+// Trash all duplicates (keep best)
+document.getElementById('trash-all-duplicates')?.addEventListener('click', async () => {
+    const allCheckboxes = document.querySelectorAll('.photo-select:checked');
+    const photoIds = Array.from(allCheckboxes).map(cb => parseInt(cb.dataset.id));
+
+    if (photoIds.length === 0) {
+        alert('No photos selected');
+        return;
+    }
+
+    if (!confirm(`Move ${photoIds.length} duplicate photos to trash, keeping the best from each group?`)) {
+        return;
+    }
+
+    try {
+        const response = await fetch('/actions/trash', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({photo_ids: photoIds})
+        });
+
+        const result = await response.json();
+        if (result.success && result.data) {
+            alert(result.data.message);
+            window.location.reload();
+        } else {
+            alert('Error: ' + (result.error || 'Failed to trash photos'));
+        }
+    } catch (error) {
+        alert('Error: ' + error.message);
+    }
+});
+</script>
+{% endblock %}

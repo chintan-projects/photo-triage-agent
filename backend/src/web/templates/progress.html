@@ -1,0 +1,116 @@
+{% extends "base.html" %}
+
+{% block title %}Analyzing Photos - Photo Triage Agent{% endblock %}
+
+{% block content %}
+<div class="container">
+    <section class="progress-section">
+        <h2>Analyzing Photos...</h2>
+
+        <div class="progress-bar-container">
+            <div id="progress-bar" class="progress-bar" style="width: 0%"></div>
+        </div>
+        <p id="progress-text">Starting...</p>
+
+        <div class="current-photo" id="current-photo">
+            <p>Preparing analysis...</p>
+        </div>
+
+        <div class="metrics-panel">
+            <h3>Performance</h3>
+            <div class="metrics-grid">
+                <div class="metric">
+                    <span class="metric-label">Throughput</span>
+                    <span id="throughput" class="metric-value">0.00 photos/sec</span>
+                </div>
+                <div class="metric">
+                    <span class="metric-label">Memory</span>
+                    <span id="memory" class="metric-value">0 MB</span>
+                </div>
+                <div class="metric">
+                    <span class="metric-label">Avg Inference</span>
+                    <span id="inference" class="metric-value">0 ms</span>
+                </div>
+                <div class="metric">
+                    <span class="metric-label">ETA</span>
+                    <span id="eta" class="metric-value">Calculating...</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="stats-panel" id="stats-panel">
+            <h3>Found So Far</h3>
+            <div id="stats-content">
+                <p>Waiting for results...</p>
+            </div>
+        </div>
+    </section>
+</div>
+
+<script>
+const jobId = '{{ job_id }}';
+let pollInterval;
+
+async function updateProgress() {
+    try {
+        const response = await fetch(`/analyze/status/${jobId}`);
+        const result = await response.json();
+
+        if (!result.success || !result.data) {
+            document.getElementById('progress-text').textContent =
+                `Error: ${result.error || 'Failed to fetch status'}`;
+            document.getElementById('progress-text').classList.add('error');
+            return;
+        }
+
+        const data = result.data;
+
+        // Update progress bar
+        const progressBar = document.getElementById('progress-bar');
+        const progressText = document.getElementById('progress-text');
+        progressBar.style.width = `${data.progress_percent}%`;
+        progressText.textContent = `${data.processed_photos} / ${data.total_photos} photos (${data.progress_percent.toFixed(1)}%)`;
+
+        // Update metrics if available
+        if (data.metrics) {
+            document.getElementById('throughput').textContent =
+                `${data.metrics.photos_per_second.toFixed(2)} photos/sec`;
+            document.getElementById('memory').textContent =
+                `${data.metrics.memory_mb.toFixed(0)} MB (${data.metrics.memory_percent.toFixed(1)}%)`;
+            document.getElementById('inference').textContent =
+                `${data.metrics.avg_inference_ms.toFixed(0)} ms`;
+
+            if (data.metrics.eta_seconds) {
+                const minutes = Math.floor(data.metrics.eta_seconds / 60);
+                const seconds = Math.floor(data.metrics.eta_seconds % 60);
+                document.getElementById('eta').textContent =
+                    minutes > 0 ? `${minutes}m ${seconds}s` : `${seconds}s`;
+            }
+
+            if (data.metrics.current_photo) {
+                document.getElementById('current-photo').innerHTML =
+                    `<p>Processing: <code>${data.metrics.current_photo}</code></p>`;
+            }
+        }
+
+        // Check if complete
+        if (data.status === 'completed') {
+            clearInterval(pollInterval);
+            window.location.href = `/results/${jobId}`;
+        } else if (data.status === 'failed') {
+            clearInterval(pollInterval);
+            document.getElementById('progress-text').textContent =
+                `Failed: ${data.error || 'Unknown error'}`;
+            document.getElementById('progress-text').classList.add('error');
+        }
+
+    } catch (error) {
+        console.error('Failed to fetch progress:', error);
+    }
+}
+
+// Poll every second
+pollInterval = setInterval(updateProgress, 1000);
+updateProgress(); // Initial call
+</script>
+{% endblock %}
