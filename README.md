@@ -17,12 +17,27 @@ So I built this. It uses a local vision-language model to classify photos, detec
 
 ## What It Does
 
-- **AI Classification** — Categorize photos (people, landscapes, food, documents, screenshots) using a local LFM model
-- **Duplicate Detection** — Find exact and near-duplicate photos using perceptual hashing
-- **Blur Detection** — Flag blurry photos you might want to delete
-- **Screenshot Detection** — Identify screenshots and memes for easy cleanup
-- **Natural Language Search** — Ask "find sunset photos" or "show me receipts"
-- **Safe Cleanup** — Move to trash with full undo support
+**AI Classification** — Each photo is categorized into one of:
+
+| Category | Examples |
+|----------|----------|
+| People | Portraits, group photos, selfies |
+| Landscape | Nature, cityscapes, sunsets |
+| Food | Meals, recipes, restaurant photos |
+| Document | Receipts, bills, scanned papers |
+| Screenshot | Phone/computer screenshots |
+| Meme | Social media images, memes |
+| Animal | Pets, wildlife |
+| Object | Products, items, random objects |
+
+**Quality Analysis** — Fast detection (no AI needed) for:
+- **Blur detection** — Flag blurry photos you might want to delete
+- **Duplicate detection** — Find exact and near-duplicate photos using perceptual hashing
+- **Screenshot detection** — Identify screenshots by metadata and dimensions
+
+**Natural Language Search** — Ask "find sunset photos" or "show me receipts from last month"
+
+**Safe Cleanup** — Move to trash with full undo support
 
 All processing happens on your machine. Your photos never leave.
 
@@ -45,6 +60,39 @@ uv sync
 
 Open [http://localhost:8000](http://localhost:8000) in your browser.
 
+## Accessing iCloud Photos Library
+
+To analyze your iCloud Photos library, macOS requires **Full Disk Access** permission:
+
+1. Open **System Settings → Privacy & Security → Full Disk Access**
+2. Click **+** and add **Terminal** (or iTerm/your terminal app)
+3. Restart Terminal and the server
+
+Then use this path:
+```
+~/Pictures/Photos Library.photoslibrary/originals/
+```
+
+**Alternative:** Export photos from Photos.app to a regular folder and analyze that instead.
+
+## Large Libraries (10K+ photos)
+
+For large photo libraries, use **batch processing** to analyze incrementally:
+
+1. Set a batch size (e.g., 500 photos) in the web UI
+2. Run analysis — it processes 500 new photos and stops
+3. Run again — it skips already-analyzed photos and processes the next 500
+4. Repeat until done
+
+Already-analyzed photos are tracked by file hash, so you can stop and resume anytime.
+
+```bash
+# Via API: analyze 500 photos at a time
+curl -X POST http://localhost:8000/analyze/folder \
+  -H "Content-Type: application/json" \
+  -d '{"folder_path": "~/Pictures", "limit": 500}'
+```
+
 ## How It Works
 
 ```mermaid
@@ -63,36 +111,21 @@ flowchart LR
 ```
 
 **Analysis pipeline:**
-1. **Fast analyzers** run in parallel (~50ms/photo): blur detection, screenshot detection, perceptual hashing
-2. **LFM vision model** classifies each photo (~2-3s/photo): generates category and natural language description
+1. **Fast analyzers** run in parallel (~50ms/photo): blur, screenshot, perceptual hash
+2. **LFM vision model** classifies each photo (~2-3s/photo): category + natural language description
 3. Results stored in SQLite for instant browsing and search
 
-## Usage
-
-### Web Dashboard
-
-1. Enter the path to your photo folder (e.g., `~/Pictures`)
-2. Click "Start Analysis" and watch progress
-3. Browse by category, review duplicates, search with natural language
-4. Trash what you don't need (with undo)
-
-**Tip:** For iCloud Photos on macOS:
-```
-~/Pictures/Photos Library.photoslibrary/originals/
-```
-
-### Natural Language Search
+## Natural Language Search
 
 The search understands context, not just keywords:
 
 | Query | What it finds |
 |-------|---------------|
 | "sunset photos" | Landscape photos with sunset lighting |
-| "receipts from stores" | Screenshots and photos of receipts |
+| "receipts from stores" | Documents and screenshots of receipts |
 | "blurry duplicates" | Photos that are both blurry AND have duplicates |
 | "people at the beach" | Photos with people in beach/ocean settings |
-
-### Search Flow
+| "food I cooked" | Food photos (filters out restaurant shots if described) |
 
 ```mermaid
 flowchart TD
@@ -120,15 +153,24 @@ Tested on Apple Silicon (M-series):
 For scripting or building your own UI:
 
 ```bash
-# Start analysis
+# Start analysis (with optional batch limit)
 curl -X POST http://localhost:8000/analyze/folder \
   -H "Content-Type: application/json" \
-  -d '{"folder_path": "~/Pictures"}'
+  -d '{"folder_path": "~/Pictures", "limit": 500}'
+
+# Check progress
+curl http://localhost:8000/analyze/status/{job_id}
 
 # Search
 curl -X POST http://localhost:8000/chat \
   -H "Content-Type: application/json" \
   -d '{"message": "find all screenshots"}'
+
+# List photos by category
+curl "http://localhost:8000/photos?category=document"
+
+# Get duplicates
+curl http://localhost:8000/duplicates
 ```
 
 Full API reference in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
@@ -165,11 +207,13 @@ photo-triage-agent/
 - macOS only (Linux likely works but untested)
 - Single-threaded AI inference (~2-3s per photo)
 - No HEIC thumbnail support yet
+- Requires Full Disk Access for Photos Library
 
 **Planned improvements:**
 - Faster search with dedicated text model
 - Native Mac app with Photos.app integration
 - Auto-organize into folders by category
+- HEIC thumbnail generation
 
 ## Development
 

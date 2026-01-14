@@ -6,7 +6,10 @@
 <div class="container">
     <section class="results-header">
         <h2>Analysis Complete</h2>
-        <p>Processed <strong>{{ total_photos }}</strong> photos</p>
+        <p>Processed <strong>{{ processed_photos }}</strong> of {{ total_photos }} photos</p>
+        {% if stopped_at_limit %}
+        <p class="batch-note">Batch limit reached. Run again to process more photos.</p>
+        {% endif %}
     </section>
 
     <section class="results-summary">

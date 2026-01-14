@@ -224,6 +224,11 @@ class FolderAnalysisRequest(BaseModel):
     """Request to start folder analysis."""
     folder_path: str
     skip_lfm: bool = False
+    limit: int | None = Field(
+        default=None,
+        description="Max photos to process (for incremental analysis). Already-analyzed photos are always skipped.",
+        ge=1,
+    )
 
 
 class TrashRequest(BaseModel):

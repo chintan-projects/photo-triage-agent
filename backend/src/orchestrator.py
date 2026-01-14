@@ -9,6 +9,7 @@ import structlog
 
 from .analyzers import AnalyzerRegistry, find_duplicates
 from .classifiers import LFMCliProvider, ModelProvider
+from .config import get_model_config, models_available
 from .database import (
     AnalysisRepository,
     DuplicateRepository,
@@ -66,11 +67,25 @@ class FolderOrchestrator:
         """Register callback for progress updates."""
         self._progress_callbacks.append(callback)
 
-    async def _ensure_model(self) -> ModelProvider:
-        """Lazy-load model provider."""
-        if self._model_provider is None:
-            logger.info("loading_lfm_model")
-            self._model_provider = LFMCliProvider()
+    async def _ensure_model(self) -> ModelProvider | None:
+        """Lazy-load model provider.
+
+        Returns:
+            ModelProvider if models available, None otherwise.
+        """
+        if self._model_provider is None and not self._model_loaded:
+            if models_available():
+                logger.info("loading_lfm_model")
+                config = get_model_config()
+                self._model_provider = LFMCliProvider(
+                    model_path=config["model_path"],
+                    mmproj_path=config["mmproj_path"],
+                    cli_path=config["cli_path"],
+                    n_ctx=config["n_ctx"],
+                    n_gpu_layers=config["n_gpu_layers"],
+                )
+            else:
+                logger.warning("lfm_model_not_available", reason="model files not found")
             self._model_loaded = True
         return self._model_provider
 
@@ -79,6 +94,7 @@ class FolderOrchestrator:
         job_id: str,
         folder_path: str | Path,
         skip_lfm: bool = False,
+        limit: int | None = None,
     ) -> dict:
         """Process all images in a folder.
 
@@ -86,6 +102,8 @@ class FolderOrchestrator:
             job_id: Unique job identifier.
             folder_path: Path to folder containing images.
             skip_lfm: If True, skip LFM classification (faster, for testing).
+            limit: Max NEW photos to process (already-analyzed photos don't count).
+                   Useful for incremental analysis of large libraries.
 
         Returns:
             Summary of analysis results.
@@ -105,8 +123,17 @@ class FolderOrchestrator:
         try:
             # Enumerate all images
             image_paths = []
-            async for path in enumerate_images(folder_path):
-                image_paths.append(path)
+            try:
+                async for path in enumerate_images(folder_path):
+                    image_paths.append(path)
+            except PermissionError as e:
+                error_msg = (
+                    f"Permission denied accessing {folder_path}. "
+                    "For Photos Library, grant Full Disk Access to Terminal in "
+                    "System Settings → Privacy & Security → Full Disk Access."
+                )
+                logger.error("permission_denied", job_id=job_id, folder=str(folder_path))
+                raise PermissionError(error_msg) from e
 
             total = len(image_paths)
             logger.info("images_found", job_id=job_id, count=total)
@@ -129,6 +156,20 @@ class FolderOrchestrator:
             }
 
             for i, image_path in enumerate(image_paths):
+                # Check limit BEFORE processing next photo
+                if limit and results["processed"] >= limit:
+                    logger.info(
+                        "batch_limit_reached",
+                        job_id=job_id,
+                        limit=limit,
+                        processed=results["processed"],
+                        skipped=results["skipped"],
+                        remaining=total - i,
+                    )
+                    results["stopped_at_limit"] = True
+                    results["remaining"] = total - i
+                    break
+
                 try:
                     await self._process_single_image(
                         image_path, job_id, skip_lfm, results
@@ -144,6 +185,31 @@ class FolderOrchestrator:
 
                 # Update progress
                 await self.job_repo.update_progress(job_id, processed=i + 1)
+
+                # Log progress every 50 photos
+                if (i + 1) % 50 == 0:
+                    logger.info(
+                        "batch_progress",
+                        job_id=job_id,
+                        iteration=i + 1,
+                        processed=results["processed"],
+                        skipped=results["skipped"],
+                        limit=limit,
+                    )
+
+                # Double-check limit AFTER processing (safety net)
+                if limit and results["processed"] >= limit:
+                    logger.info(
+                        "batch_limit_reached",
+                        job_id=job_id,
+                        limit=limit,
+                        processed=results["processed"],
+                        skipped=results["skipped"],
+                        remaining=total - i - 1,
+                    )
+                    results["stopped_at_limit"] = True
+                    results["remaining"] = total - i - 1
+                    break
 
             # Find duplicates after all images processed
             duplicates_found = await self._find_and_store_duplicates(job_id)
@@ -245,26 +311,30 @@ class FolderOrchestrator:
         if not skip_lfm:
             try:
                 model = await self._ensure_model()
-                classification = model.classify(path_str)
+                if model is None:
+                    # Model not available, skip classification
+                    pass
+                else:
+                    classification = model.classify(path_str)
 
-                await self.analysis_repo.save(
-                    photo_id=photo.id,
-                    analyzer="lfm",
-                    result={
-                        "category": classification.category.value,
-                        "description": classification.description,
-                        "contains_faces": classification.contains_faces,
-                        "is_screenshot": classification.is_screenshot,
-                        "is_meme": classification.is_meme,
-                    },
-                    confidence=classification.confidence,
-                )
+                    await self.analysis_repo.save(
+                        photo_id=photo.id,
+                        analyzer="lfm",
+                        result={
+                            "category": classification.category.value,
+                            "description": classification.description,
+                            "contains_faces": classification.contains_faces,
+                            "is_screenshot": classification.is_screenshot,
+                            "is_meme": classification.is_meme,
+                        },
+                        confidence=classification.confidence,
+                    )
 
-                # Track category counts
-                category = classification.category.value
-                results["categories"][category] = (
-                    results["categories"].get(category, 0) + 1
-                )
+                    # Track category counts
+                    category = classification.category.value
+                    results["categories"][category] = (
+                        results["categories"].get(category, 0) + 1
+                    )
             except Exception as e:
                 logger.warning(
                     "lfm_classification_failed", path=path_str, error=str(e)

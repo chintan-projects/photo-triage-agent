@@ -182,8 +182,14 @@ async def analyze_folder(
         )
 
     # Start async job
+    logger.info(
+        "starting_analysis",
+        folder=str(folder),
+        skip_lfm=request.skip_lfm,
+        limit=request.limit,
+    )
     job_id = await job_service.start_analysis(
-        str(folder), skip_lfm=request.skip_lfm
+        str(folder), skip_lfm=request.skip_lfm, limit=request.limit
     )
 
     return APIResponse.ok(

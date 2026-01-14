@@ -61,6 +61,7 @@ async def results_page(request: Request, job_id: str, db=Depends(get_db)):
             "request": request,
             "job_id": job_id,
             "total_photos": status["total_photos"],
+            "processed_photos": status["processed_photos"],
             "categories": categories,
             "blurry_count": len(blurry),
             "screenshot_count": len(screenshots),

@@ -9,12 +9,66 @@
         <p>Select photos to analyze. Find duplicates, blurry shots, and screenshots. All processing happens locally.</p>
     </section>
 
-    <!-- Step 1: Select Photos -->
+    <!-- Option A: Analyze Local Folder (for large libraries) -->
+    <section class="local-folder-section" id="local-folder-section">
+        <h3>Analyze Local Folder</h3>
+        <p class="section-hint">Best for large photo libraries (iCloud, Photos.app). Enter the folder path directly.</p>
+
+        <div class="form-group">
+            <label for="folder-path">Folder Path</label>
+            <input type="text" id="folder-path" placeholder="~/Pictures or /Users/you/Photos">
+            <span class="hint">Example: ~/Pictures or ~/Downloads/vacation-photos</span>
+        </div>
+
+        <details class="permission-note">
+            <summary>Using iCloud Photos Library?</summary>
+            <p>To access <code>~/Pictures/Photos Library.photoslibrary</code>, you need to grant <strong>Full Disk Access</strong> to Terminal:</p>
+            <ol>
+                <li>Open <strong>System Settings → Privacy & Security → Full Disk Access</strong></li>
+                <li>Click + and add <strong>Terminal</strong> (or iTerm/your terminal app)</li>
+                <li>Restart Terminal and the server</li>
+            </ol>
+            <p>Then use path: <code>~/Pictures/Photos Library.photoslibrary/originals/</code></p>
+        </details>
+
+        <div class="form-row">
+            <div class="form-group">
+                <label for="batch-size">Batch Size</label>
+                <select id="batch-size">
+                    <option value="">All photos</option>
+                    <option value="100">100 photos</option>
+                    <option value="250">250 photos</option>
+                    <option value="500" selected>500 photos (recommended)</option>
+                    <option value="1000">1000 photos</option>
+                </select>
+                <span class="hint">Process in batches for large libraries. Already-analyzed photos are skipped.</span>
+            </div>
+            <div class="form-group">
+                <label class="checkbox-label">
+                    <input type="checkbox" id="skip-lfm-local">
+                    Quick mode (skip AI classification)
+                </label>
+            </div>
+        </div>
+
+        <button class="btn btn-primary btn-large" id="analyze-local-btn">
+            Start Analysis
+        </button>
+
+        <div class="status hidden" id="local-status"></div>
+    </section>
+
+    <div class="section-divider">
+        <span>or</span>
+    </div>
+
+    <!-- Option B: Upload Photos (for small batches) -->
     <section class="upload-section" id="step-select">
-        <h3>1. Select Photos</h3>
+        <h3>Upload Photos</h3>
+        <p class="section-hint">For smaller batches. Select files to upload and analyze.</p>
         <div class="upload-options">
             <div class="upload-option primary">
-                <label for="folder-input" class="btn btn-primary btn-large">
+                <label for="folder-input" class="btn btn-secondary btn-large">
                     Select Folder
                 </label>
                 <input type="file" id="folder-input" webkitdirectory directory multiple hidden>
@@ -115,7 +169,88 @@
 </div>
 
 <style>
-/* Additional styles for upload UI */
+/* Local folder section */
+.local-folder-section {
+    background: var(--color-surface);
+    padding: 2rem;
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+    max-width: 600px;
+    margin: 0 auto 2rem;
+}
+
+.section-hint {
+    color: var(--color-text-muted);
+    margin-bottom: 1.5rem;
+}
+
+.permission-note {
+    background: #f0f7ff;
+    border: 1px solid #cce0ff;
+    border-radius: var(--radius);
+    padding: 0.75rem 1rem;
+    margin: 1rem 0;
+    font-size: 0.9rem;
+}
+
+.permission-note summary {
+    cursor: pointer;
+    font-weight: 500;
+    color: var(--color-primary);
+}
+
+.permission-note p, .permission-note ol {
+    margin: 0.75rem 0 0 0;
+    color: var(--color-text);
+}
+
+.permission-note ol {
+    padding-left: 1.5rem;
+}
+
+.permission-note code {
+    background: #e8f0fe;
+    padding: 0.1rem 0.3rem;
+    border-radius: 3px;
+    font-size: 0.85rem;
+}
+
+.form-row {
+    display: flex;
+    gap: 2rem;
+    align-items: flex-start;
+    flex-wrap: wrap;
+}
+
+.form-row .form-group {
+    flex: 1;
+    min-width: 200px;
+}
+
+.section-divider {
+    text-align: center;
+    margin: 2rem 0;
+    position: relative;
+}
+
+.section-divider::before {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 0;
+    right: 0;
+    height: 1px;
+    background: var(--color-border);
+}
+
+.section-divider span {
+    background: var(--color-bg);
+    padding: 0 1rem;
+    color: var(--color-text-muted);
+    position: relative;
+}
+
+/* Upload section styles */
 .upload-options {
     display: flex;
     gap: 2rem;
@@ -243,6 +378,69 @@
 </style>
 
 <script>
+// =============================================
+// Local Folder Analysis (for large libraries)
+// =============================================
+const analyzeLocalBtn = document.getElementById('analyze-local-btn');
+const folderPathInput = document.getElementById('folder-path');
+const batchSizeSelect = document.getElementById('batch-size');
+const skipLfmLocal = document.getElementById('skip-lfm-local');
+const localStatus = document.getElementById('local-status');
+
+analyzeLocalBtn.addEventListener('click', async () => {
+    const folderPath = folderPathInput.value.trim();
+
+    if (!folderPath) {
+        localStatus.textContent = 'Please enter a folder path';
+        localStatus.className = 'status error';
+        localStatus.classList.remove('hidden');
+        return;
+    }
+
+    const batchSize = batchSizeSelect.value;
+    const skipLfm = skipLfmLocal.checked;
+
+    // Disable button while processing
+    analyzeLocalBtn.disabled = true;
+    analyzeLocalBtn.textContent = 'Starting...';
+    localStatus.classList.add('hidden');
+
+    try {
+        const response = await fetch('/analyze/folder', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                folder_path: folderPath,
+                skip_lfm: skipLfm,
+                limit: batchSize ? parseInt(batchSize) : null,
+            }),
+        });
+
+        const result = await response.json();
+
+        if (result.success && result.data) {
+            // Redirect to progress page
+            window.location.href = `/progress/${result.data.job_id}`;
+        } else {
+            localStatus.textContent = result.error || 'Failed to start analysis';
+            localStatus.className = 'status error';
+            localStatus.classList.remove('hidden');
+            analyzeLocalBtn.disabled = false;
+            analyzeLocalBtn.textContent = 'Start Analysis';
+        }
+    } catch (error) {
+        localStatus.textContent = 'Error: ' + error.message;
+        localStatus.className = 'status error';
+        localStatus.classList.remove('hidden');
+        analyzeLocalBtn.disabled = false;
+        analyzeLocalBtn.textContent = 'Start Analysis';
+    }
+});
+
+// =============================================
+// File Upload (for small batches)
+// =============================================
+
 // State
 let selectedFiles = [];
 let sessionId = null;

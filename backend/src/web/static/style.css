@@ -319,6 +319,12 @@ body {
 }
 
 /* Results page */
+.batch-note {
+    color: var(--color-primary);
+    font-size: 0.9rem;
+    margin-top: 0.5rem;
+}
+
 .results-summary {
     margin: 2rem 0;
 }

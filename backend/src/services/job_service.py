@@ -29,12 +29,14 @@ class JobService:
         self,
         folder_path: str,
         skip_lfm: bool = False,
+        limit: int | None = None,
     ) -> str:
         """Start a new analysis job.
 
         Args:
             folder_path: Path to folder to analyze.
             skip_lfm: Skip LFM classification (faster, for testing).
+            limit: Max NEW photos to process (for incremental batch analysis).
 
         Returns:
             Job ID for tracking progress.
@@ -54,11 +56,11 @@ class JobService:
 
         # Start background task
         task = asyncio.create_task(
-            self._run_analysis(job_id, folder_path, orchestrator, skip_lfm)
+            self._run_analysis(job_id, folder_path, orchestrator, skip_lfm, limit)
         )
         self._active_jobs[job_id] = task
 
-        logger.info("job_started", job_id=job_id, folder_path=folder_path)
+        logger.info("job_started", job_id=job_id, folder_path=folder_path, limit=limit)
         return job_id
 
     async def _run_analysis(
@@ -67,10 +69,13 @@ class JobService:
         folder_path: str,
         orchestrator: FolderOrchestrator,
         skip_lfm: bool,
+        limit: int | None = None,
     ) -> None:
         """Run analysis in background."""
         try:
-            await orchestrator.process_folder(job_id, folder_path, skip_lfm=skip_lfm)
+            await orchestrator.process_folder(
+                job_id, folder_path, skip_lfm=skip_lfm, limit=limit
+            )
         except asyncio.CancelledError:
             logger.info("job_cancelled", job_id=job_id)
             await self.job_repo.update_status(job_id, "cancelled")
