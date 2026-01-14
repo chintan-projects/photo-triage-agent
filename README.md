@@ -111,8 +111,8 @@ flowchart LR
 ```
 
 **Analysis pipeline:**
-1. **Fast analyzers** run in parallel (~50ms/photo): blur, screenshot, perceptual hash
-2. **LFM vision model** classifies each photo (~2-3s/photo): category + natural language description
+1. **Fast analyzers** run first: blur detection, screenshot detection, perceptual hash
+2. **LFM vision model** classifies each photo: category + natural language description
 3. Results stored in SQLite for instant browsing and search
 
 ## Natural Language Search
@@ -130,23 +130,21 @@ The search understands context, not just keywords:
 ```mermaid
 flowchart TD
     A[User Query] --> B[Keyword Pre-filter]
-    B --> |~100 candidates| C[LFM Reasoning]
-    C --> |Top 20 matches| D[Results with explanations]
+    B --> C[LFM Reasoning]
+    C --> D[Results with explanations]
     C -.-> |Timeout/Error| E[Keyword Fallback]
     E --> D
 ```
 
 ## Performance
 
-Tested on Apple Silicon (M-series):
+Speed depends on your Mac's hardware (M1 vs M3, RAM, etc.). After running analysis, the results page shows your actual metrics:
 
-| Mode | Speed | Use Case |
-|------|-------|----------|
-| Full analysis | ~0.3-0.5 photos/sec | First-time analysis with AI classification |
-| Quick mode | ~10-20 photos/sec | Blur, hash, screenshot detection only |
-| Search | ~2-3 seconds | Natural language queries |
+- **Avg inference time** per photo
+- **Photos per second** throughput
+- **Total processing time**
 
-**Memory:** ~3-5GB during AI inference, ~100MB otherwise
+**Quick mode** (skip AI classification) is significantly faster if you only need blur detection, duplicate finding, and screenshot identification.
 
 ## API
 
@@ -205,7 +203,7 @@ photo-triage-agent/
 
 **Current limitations:**
 - macOS only (Linux likely works but untested)
-- Single-threaded AI inference (~2-3s per photo)
+- Single-threaded AI inference (one photo at a time)
 - No HEIC thumbnail support yet
 - Requires Full Disk Access for Photos Library
 
