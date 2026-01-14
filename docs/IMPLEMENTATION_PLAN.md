@@ -245,6 +245,6 @@ backend/
 
 ## Related Documentation
 
-- **[README.md](../backend/README.md)** - User-facing documentation
+- **[README.md](../README.md)** - User-facing documentation
 - **[ARCHITECTURE.md](./ARCHITECTURE.md)** - Technical architecture with diagrams
 - **[CLAUDE.md](../CLAUDE.md)** - Coding guidelines and patterns
