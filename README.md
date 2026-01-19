@@ -47,15 +47,15 @@ All processing happens on your machine. Your photos never leave.
 
 ```bash
 # Clone and install
-git clone https://github.com/your-username/photo-triage-agent
+git clone https://github.com/chintan-projects/photo-triage-agent
 cd photo-triage-agent/backend
 uv sync
 
 # Download the AI model (~1.7GB, one-time)
-./scripts/download_model.sh
+uv run ./scripts/download_model.sh
 
 # Start the server
-./scripts/run_backend.sh
+uv run ./scripts/run_backend.sh
 ```
 
 Open [http://localhost:8000](http://localhost:8000) in your browser.
